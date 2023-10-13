@@ -1,0 +1,58 @@
+# version 0.2
+<#
+Bulk add firewall rules to block incoming based on ip range
+#>
+
+# collect CSV files with naming convention: COUNRTY_ip_range.csv
+$CountryCSVFiles = Get-ChildItem -Path c:\temp\*_ip_range.csv
+
+foreach ($CountryCSVFile in $CountryCSVFiles) {
+    Write-Host "Processing "
+    # Path to the CSV file with IP range information
+    $csvFilePath = $CountryCSVFile.FullName
+    $csvFile = (Get-ChildItem $csvFilePath).Name
+
+    write-Host "Processing $($csvFile.Split('_')[0]) CSV file." -ForegroundColor Cyan
+    
+    # Read the CSV file
+    $ipRanges = Import-Csv -Path $csvFilePath
+
+    # Maximum number of IP ranges per rule
+    $maxRangesPerRule = 500
+
+    if ($ipRanges.Length -gt 500) {
+        $Ranges = [int][math]::Ceiling(($($ipRanges.Length / 500)))
+        Write-Host "There will be $($csvFile.Split('_')[0]) firewall rule(s)"
+    }
+    
+    for ($i = 0; $i -le $($ranges - 1); $i++) {
+        $startrange = $i * 500
+        $endrange = $startrange + 499
+        New-Variable -Name "Range$i" -Value $($ipRanges[$startrange..$endrange]) -Force
+    
+        $currentRange = Get-Variable -Name "Range$i"
+        $currentRuleIpRanges = @()
+        foreach ($ai in $currentRange.Value) {
+            $startIpAddress = $ai.startipaddress
+            $endIpAddress = $ai.endipaddress
+    
+            $currentRuleIpRanges += "$startIpAddress-$endIpAddress"
+        }
+        #Get-NetFirewallRule | where DisplayName -like "BlockRule*" | Remove-NetFirewallRule
+        if ($(Get-NetFirewallRule | where DisplayName -eq "BlockRule_$($csvFile.Split('_')[0]) $i")) {
+            # Remove the old
+            Write-Host "Removing old rule: BlockRule_$($csvFile.Split('_')[0]) $i" -ForegroundColor Yellow
+            Remove-NetFirewallRule -DisplayName "BlockRule_$($csvFile.Split('_')[0]) $i"
+            # Create the new
+            Write-Host "Adding new rule: BlockRule_$($csvFile.Split('_')[0]) $i" -ForegroundColor Green
+            New-NetFirewallRule -DisplayName "BlockRule_$($csvFile.Split('_')[0]) $i" -Direction Inbound -Action Block -RemoteAddress $currentRuleIpRanges -ErrorAction SilentlyContinue | Out-Null
+        }
+        else { 
+            # Create firewall rule
+            Write-Host "Adding new rule: BlockRule_$($csvFile.Split('_')[0]) $i" -ForegroundColor Green
+            New-NetFirewallRule -DisplayName "BlockRule_$($csvFile.Split('_')[0]) $i" -Direction Inbound -Action Block -RemoteAddress $currentRuleIpRanges -ErrorAction SilentlyContinue | Out-Null
+        }
+    }
+}
+
+get-NetFirewallRule | Where-Object DisplayName -like "BlockRule*" | Select-Object DisplayName, Enabled, Profile, Direction, Action | ft
