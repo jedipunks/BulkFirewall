@@ -7,7 +7,6 @@ Bulk add firewall rules to block incoming based on ip range
 $CountryCSVFiles = Get-ChildItem -Path c:\temp\*_ip_range.csv
 
 foreach ($CountryCSVFile in $CountryCSVFiles) {
-    Write-Host "Processing "
     # Path to the CSV file with IP range information
     $csvFilePath = $CountryCSVFile.FullName
     $csvFile = (Get-ChildItem $csvFilePath).Name
